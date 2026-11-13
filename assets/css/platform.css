@@ -1391,3 +1391,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .short-card { width: 132px; }
   .library-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
+
+/* comment list + sidebar nav buttons --------------------------------------- */
+.comment-body { font-size: 14px; line-height: 1.55; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.nav-button {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 9px 12px; border-radius: 10px;
+  color: var(--muted); font-size: 14px; font-weight: 500;
+  background: none; border: 0; cursor: pointer; text-align: left;
+}
+.nav-button:hover { background: var(--surface-2); color: var(--text); }
+.nav-button.active { background: var(--surface-2); color: var(--text); font-weight: 700; }
