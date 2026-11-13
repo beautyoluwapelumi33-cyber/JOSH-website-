@@ -38,6 +38,21 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_MB || 128) * 1024 * 1024;
 const MAX_THUMB_BYTES = 1024 * 1024;
+
+/* Real, stored taxonomy. 'All' is a UI filter only, never saved on a video. */
+const CATEGORIES = [
+  'Music',
+  'Gaming',
+  'Education',
+  'Technology',
+  'Comedy',
+  'Sports',
+  'News',
+  'Business',
+  'Lifestyle',
+  'Film',
+  'Other',
+];
 const VIEW_DEDUPE_MS = 30 * 60 * 1000;
 const SESSION_SECRET_PRESENT = Boolean(process.env.SESSION_SECRET);
 
@@ -166,6 +181,7 @@ function videoSummary(video, counts = countsByVideo()) {
     id: video.id,
     title: video.title,
     description: video.description || '',
+    category: video.category || 'Other',
     status: video.status,
     createdAt: video.createdAt,
     publishedAt: video.publishedAt || null,
@@ -358,20 +374,36 @@ route('GET', '/api/stats/public', async (req, res) => {
 
 route('GET', '/api/videos', async (req, res, ctx) => {
   const q = String(ctx.query.get('q') || '').trim().toLowerCase();
+  const category = String(ctx.query.get('category') || '').trim();
+  const channel = String(ctx.query.get('channel') || '').trim();
+  const sort = String(ctx.query.get('sort') || '').trim();
+  const shortsOnly = ctx.query.get('shorts') === '1';
   const limit = Math.min(60, Math.max(1, Number(ctx.query.get('limit')) || 24));
   const counts = countsByVideo();
   let items = db.videos.filter((v) => v.status === 'published');
+  if (channel) items = items.filter((v) => v.userId === channel);
+  if (category && category !== 'All') items = items.filter((v) => (v.category || 'Other') === category);
+  if (shortsOnly) items = items.filter((v) => Number(v.durationSec) > 0 && Number(v.durationSec) <= 60);
   if (q) {
     items = items.filter(
-      (v) => v.title.toLowerCase().includes(q) || (v.description || '').toLowerCase().includes(q),
+      (v) =>
+        v.title.toLowerCase().includes(q) ||
+        (v.description || '').toLowerCase().includes(q) ||
+        creatorName(v).toLowerCase().includes(q),
     );
   }
-  items = items
-    .slice()
-    .sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt))
-    .slice(0, limit)
-    .map((v) => videoSummary(v, counts));
-  sendJson(res, 200, { videos: items });
+  const key = (v) => new Date(v.publishedAt || v.createdAt);
+  items = items.slice().sort((a, b) => {
+    if (sort === 'views') {
+      const diff = (counts.views.get(b.id) || 0) - (counts.views.get(a.id) || 0);
+      if (diff !== 0) return diff;
+    }
+    if (sort === 'oldest') return key(a) - key(b);
+    return key(b) - key(a);
+  });
+  const total = items.length;
+  const videos = items.slice(0, limit).map((v) => videoSummary(v, counts));
+  sendJson(res, 200, { videos, total, categories: CATEGORIES });
 });
 
 route('GET', '/api/videos/:videoId', async (req, res, ctx) => {
@@ -411,6 +443,7 @@ route('POST', '/api/videos', async (req, res) => {
     userId: user.id,
     title,
     description: String(body.description || '').trim().slice(0, 2000),
+    category: CATEGORIES.includes(String(body.category || '')) ? String(body.category) : 'Other',
     status: 'draft',
     createdAt: nowIso(),
     publishedAt: null,
@@ -500,10 +533,16 @@ route('POST', '/api/videos/:videoId/view', async (req, res, ctx) => {
   const recent = db.views.find(
     (v) => v.videoId === video.id && v.viewerKey === key && Date.now() - new Date(v.createdAt).getTime() < VIEW_DEDUPE_MS,
   );
+  const user = currentUser(req);
   if (!recent) {
     db.views.push({ id: id('vw'), videoId: video.id, viewerKey: key, createdAt: nowIso() });
-    saveDb();
   }
+  if (user) {
+    db.history = (db.history || []).filter((h) => !(h.userId === user.id && h.videoId === video.id));
+    db.history.push({ id: id('hs'), userId: user.id, videoId: video.id, createdAt: nowIso() });
+    if (db.history.length > 5000) db.history = db.history.slice(-5000);
+  }
+  if (!recent || user) saveDb();
   sendJson(res, 200, { views: db.views.filter((v) => v.videoId === video.id).length, counted: !recent });
 });
 
@@ -541,6 +580,158 @@ route('POST', '/api/videos/:videoId/comments', async (req, res, ctx) => {
   db.comments.push(comment);
   saveDb();
   sendJson(res, 201, { comment: { ...comment, author: user.displayName } });
+});
+
+/* ------------------------------------------------- discovery and channels */
+
+route('GET', '/api/categories', async (req, res) => {
+  sendJson(res, 200, { categories: CATEGORIES });
+});
+
+function subscriberCountFor(creatorId) {
+  return (db.subscriptions || []).filter((s) => s.creatorId === creatorId).length;
+}
+
+route('GET', '/api/channels/:userId', async (req, res, ctx) => {
+  const me = currentUser(req);
+  const owner = db.users.find((u) => u.id === ctx.params.userId);
+  if (!owner) return fail(res, 404, 'Channel not found.');
+  const counts = countsByVideo();
+  const all = db.videos.filter((v) => v.userId === owner.id);
+  const visible = all.filter((v) => canWatch(v, me));
+  const published = visible
+    .filter((v) => v.status === 'published')
+    .slice()
+    .sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt));
+  const ids = new Set(all.map((v) => v.id));
+  const subs = (db.subscriptions || []).filter((s) => s.creatorId === owner.id);
+  const byCategory = new Map();
+  for (const v of published) {
+    const key = v.category || 'Other';
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(videoSummary(v, counts));
+  }
+  sendJson(res, 200, {
+    channel: {
+      id: owner.id,
+      displayName: owner.displayName,
+      role: owner.role,
+      createdAt: owner.createdAt,
+      subscriberCount: subs.length,
+      videoCount: published.length,
+      totalViews: db.views.filter((v) => ids.has(v.videoId)).length,
+    },
+    subscribed: me ? subs.some((s) => s.userId === me.id) : false,
+    isOwner: me ? me.id === owner.id : false,
+    videos: published.map((v) => videoSummary(v, counts)),
+    collections: [...byCategory.entries()].map(([name, videos]) => ({ name, videos })),
+  });
+});
+
+route('POST', '/api/channels/:userId/subscribe', async (req, res, ctx) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const owner = db.users.find((u) => u.id === ctx.params.userId);
+  if (!owner) return fail(res, 404, 'Channel not found.');
+  if (owner.id === user.id) return fail(res, 400, 'You cannot subscribe to your own channel.');
+  db.subscriptions = db.subscriptions || [];
+  if (!db.subscriptions.some((s) => s.userId === user.id && s.creatorId === owner.id)) {
+    db.subscriptions.push({ id: id('sub'), userId: user.id, creatorId: owner.id, createdAt: nowIso() });
+    saveDb();
+  }
+  sendJson(res, 200, { subscribed: true, subscriberCount: subscriberCountFor(owner.id) });
+});
+
+route('DELETE', '/api/channels/:userId/subscribe', async (req, res, ctx) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  db.subscriptions = (db.subscriptions || []).filter(
+    (s) => !(s.userId === user.id && s.creatorId === ctx.params.userId),
+  );
+  saveDb();
+  sendJson(res, 200, { subscribed: false, subscriberCount: subscriberCountFor(ctx.params.userId) });
+});
+
+route('GET', '/api/subscriptions', async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const counts = countsByVideo();
+  const creatorIds = new Set(
+    (db.subscriptions || []).filter((s) => s.userId === user.id).map((s) => s.creatorId),
+  );
+  const videos = db.videos
+    .filter((v) => v.status === 'published' && creatorIds.has(v.userId))
+    .slice()
+    .sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt))
+    .slice(0, 48)
+    .map((v) => videoSummary(v, counts));
+  const channels = [...creatorIds]
+    .map((cid) => db.users.find((u) => u.id === cid))
+    .filter(Boolean)
+    .map((u) => ({ id: u.id, displayName: u.displayName, subscriberCount: subscriberCountFor(u.id) }));
+  sendJson(res, 200, { videos, channels });
+});
+
+route('GET', '/api/history', async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const counts = countsByVideo();
+  const rows = (db.history || [])
+    .filter((h) => h.userId === user.id)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 60);
+  const videos = [];
+  for (const row of rows) {
+    const video = db.videos.find((v) => v.id === row.videoId);
+    if (!video || !canWatch(video, user)) continue;
+    videos.push({ ...videoSummary(video, counts), watchedAt: row.createdAt });
+  }
+  sendJson(res, 200, { videos });
+});
+
+route('GET', '/api/notifications', async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const mine = new Set(db.videos.filter((v) => v.userId === user.id).map((v) => v.id));
+  const items = [];
+  for (const c of db.comments) {
+    if (!mine.has(c.videoId) || c.userId === user.id) continue;
+    const video = db.videos.find((v) => v.id === c.videoId);
+    const author = db.users.find((u) => u.id === c.userId);
+    items.push({
+      id: c.id,
+      type: 'comment',
+      title: `${(author && author.displayName) || 'Someone'} commented on ${video ? video.title : 'your video'}`,
+      detail: c.body.slice(0, 140),
+      href: `/watch?v=${c.videoId}`,
+      createdAt: c.createdAt,
+    });
+  }
+  for (const s of db.subscriptions || []) {
+    if (s.creatorId !== user.id) continue;
+    const author = db.users.find((u) => u.id === s.userId);
+    items.push({
+      id: s.id,
+      type: 'subscriber',
+      title: `${(author && author.displayName) || 'Someone'} subscribed to your channel`,
+      detail: 'New subscriber',
+      href: author ? `/channel?id=${author.id}` : '/studio',
+      createdAt: s.createdAt,
+    });
+  }
+  for (const w of db.withdrawals) {
+    if (w.userId !== user.id || w.status === 'pending') continue;
+    items.push({
+      id: w.id,
+      type: 'withdrawal',
+      title: `Withdrawal ${w.status}`,
+      detail: `${formatUsdt(w.amountMicro)} USDT (BEP20)`,
+      href: '/earnings',
+      createdAt: w.updatedAt || w.createdAt,
+    });
+  }
+  items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  sendJson(res, 200, { notifications: items.slice(0, 20), count: items.length });
 });
 
 /* ---------------------------------------------------------- creator studio */
@@ -1035,6 +1226,12 @@ const PAGES = {
   '/home': 'index.html',
   '/feed': 'feed.html',
   '/watch': 'watch.html',
+  '/channel': 'channel.html',
+  '/shorts': 'shorts.html',
+  '/subscriptions': 'subscriptions.html',
+  '/history': 'history.html',
+  '/library': 'library.html',
+  '/about': 'about.html',
   '/upload': 'upload.html',
   '/studio': 'studio.html',
   '/earnings': 'earnings.html',
