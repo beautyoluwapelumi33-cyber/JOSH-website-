@@ -1,0 +1,14 @@
+{
+  "name": "josh-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "JOSH video platform - local-first build with prepared Supabase integration",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test tests/"
+  }
+}
