@@ -1,467 +1,357 @@
+/**
+ * JOSH — private admin dashboard.
+ * Access is enforced by the server on every request (requireAdmin); this module
+ * only decides what to render after /api/admin/overview succeeds.
+ */
 import {
+  mountShell,
   api,
-  state,
-  requireUser,
-  compact,
+  esc,
+  icon,
+  toast,
+  confirmDialog,
+  setPageTitle,
+  formatCount,
   timeAgo,
-  escapeHtml,
-  el,
-  statusPill,
-  notice,
-} from './api.js';
+  emptyState,
+  requireAuth,
+  qs,
+} from './core.js';
 
-/* ------------------------------------------------------------------- admin */
+const view = document.getElementById('view');
+let tab = qs('tab') || 'overview';
 
-export async function admin() {
-  const user = await requireUser();
+const TABS = [
+  ['overview', 'Overview'],
+  ['users', 'Users'],
+  ['videos', 'Videos'],
+  ['withdrawals', 'Withdrawals'],
+  ['revenue', 'Revenue'],
+];
+
+function tabsHTML() {
+  return `<div class="tabs">${TABS.map(
+    ([key, label]) =>
+      `<a class="tab ${tab === key ? 'active' : ''}" href="/admin?tab=${key}" data-tab="${key}">${esc(label)}</a>`
+  ).join('')}</div>`;
+}
+
+function statusPill(status) {
+  const map = { pending: 'warn', approved: 'info', paid: 'ok', rejected: 'danger' };
+  return `<span class="pill ${map[status] || 'info'}">${esc(status)}</span>`;
+}
+
+async function load() {
+  const user = await requireAuth();
   if (!user) return;
+  setPageTitle('Admin');
 
-  const root = el('admin-root');
   if (user.role !== 'admin') {
-    root.innerHTML = `
-      <div class="empty">
-        <strong>Administrators only</strong>
-        This area is restricted to accounts with the administrator role. Access is refused by the server, not just hidden here.
-        <div style="margin-top:14px;"><a class="button primary" href="/feed">Back to the feed</a></div>
-      </div>`;
+    view.innerHTML = `<div class="page-head"><h1>Admin</h1></div>`;
+    view.appendChild(
+      emptyState({
+        icon: 'lock',
+        title: 'Administrator access required',
+        text: 'Your account is not an administrator. The server refuses admin data for non-admin accounts, so nothing is shown here.',
+        action: `<a class="btn ghost" href="/">Back to feed</a>`,
+      })
+    );
     return;
   }
 
-  let overview;
-  let users = [];
-  let withdrawals = [];
-  let videos = [];
+  view.innerHTML = `<div class="page-head">
+      <div><h1>Admin</h1><p class="sub">Private controls for users, content, revenue and payouts.</p></div>
+      <div class="page-actions"><span class="pill ok">${icon('lock', 14)} restricted</span></div>
+    </div>${tabsHTML()}<div id="panel"><div class="skeleton-block"></div></div>`;
+
+  const panel = document.getElementById('panel');
   try {
-    [overview, { users }, { withdrawals }, { videos }] = await Promise.all([
-      api('/api/admin/overview'),
-      api('/api/admin/users'),
-      api('/api/admin/withdrawals'),
-      api('/api/admin/videos'),
-    ]);
-  } catch (error) {
-    root.innerHTML = `<div class="empty"><strong>Could not load the admin dashboard</strong>${escapeHtml(error.message)}</div>`;
-    return;
+    if (tab === 'users') return await renderUsers(panel);
+    if (tab === 'videos') return await renderVideos(panel);
+    if (tab === 'withdrawals') return await renderWithdrawals(panel);
+    if (tab === 'revenue') return await renderRevenue(panel);
+    return await renderOverview(panel);
+  } catch (err) {
+    panel.innerHTML = '';
+    panel.appendChild(emptyState({ icon: 'alert', title: 'Could not load this panel', text: err.message }));
   }
+}
 
-  const { counts, revenue, payments } = overview;
-  const pending = withdrawals.filter((w) => w.status === 'pending');
+async function renderOverview(panel) {
+  const data = await api('/api/admin/overview');
+  const c = data.counts || {};
+  const rev = data.revenue || {};
+  const wd = data.withdrawals || {};
+  const pay = data.payments || { active: false, note: '' };
 
-  root.innerHTML = `
-    <div class="notice warn">
-      <strong>${payments.active ? 'Payment provider connected.' : 'No payment provider is connected.'}</strong>
-      ${escapeHtml(payments.note)} Every figure on this page is a recorded fact, never an estimate.
+  panel.innerHTML = `
+    ${
+      pay.active
+        ? ''
+        : `<div class="alert info"><strong>Payments are not connected.</strong><span>${esc(
+            pay.note || 'Revenue shown here exists only because an administrator recorded it.'
+          )}</span></div>`
+    }
+    <div class="kpi-grid">
+      <div class="kpi"><span class="kpi-label">Users</span><strong class="kpi-value">${formatCount(c.users || 0)}</strong><span class="kpi-hint">${c.creators || 0} creators · ${c.admins || 0} admins</span></div>
+      <div class="kpi"><span class="kpi-label">Videos</span><strong class="kpi-value">${formatCount(c.videos || 0)}</strong><span class="kpi-hint">${c.published || 0} published</span></div>
+      <div class="kpi"><span class="kpi-label">Views</span><strong class="kpi-value">${formatCount(c.views || 0)}</strong><span class="kpi-hint">${formatCount(c.comments || 0)} comments</span></div>
+      <div class="kpi accent"><span class="kpi-label">Recorded revenue</span><strong class="kpi-value">${esc(rev.grossUsdt || '0.00')} USDT</strong><span class="kpi-hint">creator ${esc(rev.creatorUsdt || '0.00')} · platform ${esc(rev.platformUsdt || '0.00')}</span></div>
+      <div class="kpi"><span class="kpi-label">Pending payouts</span><strong class="kpi-value">${esc(wd.pendingUsdt || '0.00')} USDT</strong><span class="kpi-hint">${wd.pending || 0} requests · ${wd.paid || 0} paid</span></div>
     </div>
-
-    <div class="stats" style="margin-bottom:24px;">
-      <div class="stat"><strong>${compact(counts.users)}</strong><span>Accounts</span></div>
-      <div class="stat"><strong>${compact(counts.creators)}</strong><span>Creators</span></div>
-      <div class="stat"><strong>${compact(counts.published)}</strong><span>Published videos</span></div>
-      <div class="stat"><strong>${compact(counts.views)}</strong><span>Views</span></div>
-      <div class="stat"><strong>${escapeHtml(revenue.grossUsdt)}</strong><span>Gross USDT recorded</span></div>
-      <div class="stat"><strong>${escapeHtml(revenue.platformUsdt)}</strong><span>Platform 40%</span></div>
-    </div>
-
-    <div class="grid cols-2" style="margin-bottom:24px;">
-      <div class="panel">
-        <h2>Withdrawals awaiting action</h2>
-        <p class="hint">${pending.length} pending · ${escapeHtml(overview.withdrawals.pendingUsdt)} USDT requested</p>
+    <div class="split-grid">
+      <section class="card pad">
+        <div class="card-head"><h2>Recent revenue entries</h2></div>
         ${
-          pending.length
-            ? `<div class="table-wrap">
-                <table>
-                  <thead><tr><th>Creator</th><th>Amount</th><th>Address</th><th>Requested</th></tr></thead>
-                  <tbody>
-                    ${pending
-                      .map(
-                        (w) => `<tr>
-                          <td>${escapeHtml(w.user ? w.user.displayName : 'Unknown')}<div class="small muted">${escapeHtml(w.user ? w.user.email : '')}</div></td>
-                          <td class="amount">${escapeHtml(w.amountUsdt)}</td>
-                          <td class="mono small">${escapeHtml(w.address)}</td>
-                          <td class="nowrap muted small">${timeAgo(w.createdAt)}</td>
-                        </tr>`,
-                      )
-                      .join('')}
-                  </tbody>
-                </table>
-              </div>`
-            : '<div class="empty"><strong>Nothing pending</strong>No withdrawal requests are waiting for review.</div>'
+          (rev.rows || []).length
+            ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>When</th><th>Creator</th><th>Source</th><th class="num">Gross</th></tr></thead><tbody>${rev.rows
+                .slice(0, 8)
+                .map(
+                  (r) => `<tr><td>${esc(timeAgo(r.createdAt))}</td><td>${esc(r.creatorName || r.creatorId || '—')}</td><td>${esc(r.source || '—')}</td><td class="num">${esc(r.grossUsdt || r.amountUsdt || '0.00')}</td></tr>`
+                )
+                .join('')}</tbody></table></div>`
+            : `<p class="muted">No revenue recorded yet.</p>`
         }
-      </div>
+      </section>
+      <section class="card pad">
+        <div class="card-head"><h2>Quick actions</h2></div>
+        <div class="stack gap-12">
+          <a class="btn ghost" href="/admin?tab=withdrawals">Review withdrawal requests</a>
+          <a class="btn ghost" href="/admin?tab=revenue">Record a payment</a>
+          <a class="btn ghost" href="/admin?tab=users">Manage user roles</a>
+        </div>
+      </section>
+    </div>`;
+}
 
-      <div class="panel">
-        <h2>Record a real payment</h2>
-        <p class="hint">
-          Only use this after money has genuinely arrived from a sponsor, ad network or viewer.
-          It splits 60/40 and credits the creator's balance. It does not charge anyone.
-        </p>
-        <div id="revenue-status" hidden></div>
-        <form id="revenue-form">
-          <div class="field">
-            <label for="revenue-creator">Creator</label>
-            <select id="revenue-creator" required>
-              <option value="">Select a creator…</option>
-              ${users
-                .map((u) => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.displayName)} — ${escapeHtml(u.email)}</option>`)
-                .join('')}
-            </select>
-          </div>
-          <div class="form-row">
-            <div class="field">
-              <label for="revenue-amount">Gross amount (USDT)</label>
-              <input id="revenue-amount" type="text" inputmode="decimal" placeholder="0.00" required />
-            </div>
-            <div class="field">
-              <label for="revenue-source">Source</label>
-              <input id="revenue-source" type="text" maxlength="60" placeholder="Sponsorship, ad payout…" required />
-            </div>
-          </div>
-          <div class="field">
-            <label for="revenue-note">Reference (optional)</label>
-            <input id="revenue-note" type="text" maxlength="500" placeholder="Invoice or transaction reference" />
-          </div>
-          <button class="button primary" type="submit">Record payment</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-bottom:24px;">
-      <h2>Accounts and roles</h2>
-      <p class="hint">Roles decide what the server allows. Changing a role takes effect on that account's next request.</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Account</th><th>Role</th><th>Videos</th><th>Views</th><th>Earned</th><th>Available</th><th>Joined</th></tr></thead>
-          <tbody>
-            ${users
+async function renderUsers(panel) {
+  const data = await api('/api/admin/users');
+  const users = data.users || [];
+  panel.innerHTML = `<section class="card">
+    <div class="card-head pad-x"><h2>Users</h2><span class="muted small">${users.length} accounts</span></div>
+    ${
+      users.length
+        ? `<div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Account</th><th>Role</th><th class="num">Videos</th><th class="num">Views</th><th class="num">Earned</th><th class="num">Available</th><th></th></tr></thead>
+            <tbody>${users
               .map(
                 (u) => `<tr>
-                  <td><strong>${escapeHtml(u.displayName)}</strong><div class="small muted">${escapeHtml(u.email)}</div></td>
-                  <td>
-                    <select data-role-for="${escapeHtml(u.id)}" ${u.id === user.id ? 'disabled title="You cannot change your own role"' : ''}>
-                      ${['viewer', 'creator', 'admin']
-                        .map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`)
-                        .join('')}
-                    </select>
+                  <td><span class="row-meta"><span class="row-title">${esc(u.displayName)}</span><span class="row-sub">${esc(u.email)}</span></span></td>
+                  <td><span class="pill ${u.role === 'admin' ? 'ok' : 'info'}">${esc(u.role)}</span></td>
+                  <td class="num">${formatCount(u.videos || 0)}</td>
+                  <td class="num">${formatCount(u.views || 0)}</td>
+                  <td class="num">${esc(u.earningsUsdt || '0.00')}</td>
+                  <td class="num">${esc(u.availableUsdt || '0.00')}</td>
+                  <td class="cell-actions">
+                    <button class="btn sm ghost" data-role="${esc(u.id)}" data-next="${u.role === 'admin' ? 'creator' : 'admin'}">
+                      ${u.role === 'admin' ? 'Make creator' : 'Make admin'}
+                    </button>
                   </td>
-                  <td class="amount">${compact(u.videos)}</td>
-                  <td class="amount">${compact(u.views)}</td>
-                  <td class="amount">${escapeHtml(u.earningsUsdt)}</td>
-                  <td class="amount">${escapeHtml(u.availableUsdt)}</td>
-                  <td class="nowrap muted small">${timeAgo(u.createdAt)}</td>
-                </tr>`,
+                </tr>`
               )
-              .join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-bottom:24px;">
-      <h2>Withdrawal queue</h2>
-      <p class="hint">
-        Approving only changes the status. Marking a request paid requires the real on-chain transaction hash —
-        nothing is ever marked paid automatically, and no transfer is sent from this dashboard.
-      </p>
-      <div id="admin-wd-status" hidden></div>
-      ${
-        withdrawals.length
-          ? `<div class="table-wrap">
-              <table>
-                <thead><tr><th>Creator</th><th>Amount</th><th>Address</th><th>Status</th><th>Settlement</th></tr></thead>
-                <tbody>
-                  ${withdrawals
-                    .map(
-                      (w) => `<tr>
-                        <td>${escapeHtml(w.user ? w.user.displayName : 'Unknown')}<div class="small muted">${escapeHtml(w.user ? w.user.email : '')}</div></td>
-                        <td class="amount">${escapeHtml(w.amountUsdt)}</td>
-                        <td class="mono small">${escapeHtml(w.address)}</td>
-                        <td>${statusPill(w.status)}${w.txHash ? `<div class="small mono muted">${escapeHtml(w.txHash.slice(0, 14))}…</div>` : ''}</td>
-                        <td>
-                          ${
-                            w.status === 'paid' || w.status === 'rejected'
-                              ? '<span class="small muted">closed</span>'
-                              : `<div class="row" style="gap:8px;flex-wrap:wrap;">
-                                   ${w.status === 'pending' ? `<button class="button secondary small" data-wd="approve" data-id="${w.id}" type="button">Approve</button>` : ''}
-                                   <input data-tx="${w.id}" type="text" placeholder="0x… tx hash" style="min-width:170px;" />
-                                   <button class="button primary small" data-wd="paid" data-id="${w.id}" type="button">Mark paid</button>
-                                   <button class="button danger small" data-wd="reject" data-id="${w.id}" type="button">Reject</button>
-                                 </div>`
-                          }
-                        </td>
-                      </tr>`,
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-          : '<div class="empty"><strong>No withdrawal requests</strong>Requests will appear here for review.</div>'
-      }
-    </div>
-
-    <div class="panel">
-      <h2>All videos</h2>
-      <p class="hint">${compact(counts.videos)} total · ${compact(counts.published)} published</p>
-      ${
-        videos.length
-          ? `<div class="table-wrap">
-              <table>
-                <thead><tr><th>Title</th><th>Creator</th><th>Status</th><th>Views</th><th>Uploaded</th></tr></thead>
-                <tbody>
-                  ${videos
-                    .map(
-                      (v) => `<tr>
-                        <td><a href="/watch?v=${v.id}">${escapeHtml(v.title)}</a></td>
-                        <td>${escapeHtml(v.creator.displayName)}</td>
-                        <td>${statusPill(v.status)}</td>
-                        <td class="amount">${compact(v.views)}</td>
-                        <td class="nowrap muted small">${timeAgo(v.createdAt)}</td>
-                      </tr>`,
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-          : '<div class="empty"><strong>No videos yet</strong>Uploads across the platform will be listed here.</div>'
-      }
-    </div>`;
-
-  // Role changes
-  root.querySelectorAll('select[data-role-for]').forEach((select) => {
-    select.addEventListener('change', async () => {
-      const id = select.dataset.roleFor;
-      const role = select.value;
-      select.disabled = true;
-      try {
-        await api(`/api/admin/users/${id}`, { method: 'PATCH', body: { role } });
-        notice('admin-wd-status', `Role updated to <strong>${escapeHtml(role)}</strong>.`, 'ok');
-      } catch (error) {
-        notice('admin-wd-status', escapeHtml(error.message), 'error');
-        select.disabled = false;
-      }
-    });
-  });
-
-  // Withdrawal actions
-  root.addEventListener('click', async (event) => {
-    const button = event.target.closest('button[data-wd]');
-    if (!button) return;
-    const { wd: action, id } = button.dataset;
-    const txInput = root.querySelector(`input[data-tx="${id}"]`);
-    const body = { action };
-    if (action === 'paid') {
-      body.txHash = txInput ? txInput.value.trim() : '';
-      if (!body.txHash) {
-        notice('admin-wd-status', 'Enter the BEP20 transaction hash before marking a request paid.', 'error');
-        return;
-      }
+              .join('')}</tbody></table></div>`
+        : `<p class="muted pad">No accounts yet.</p>`
     }
-    if (action === 'reject' && !window.confirm('Reject this withdrawal request? The creator keeps their balance.')) return;
+  </section>`;
 
-    button.disabled = true;
+  panel.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-role]');
+    if (!btn) return;
+    const nextRole = btn.dataset.next;
+    const ok = await confirmDialog({
+      title: nextRole === 'admin' ? 'Grant administrator access?' : 'Remove administrator access?',
+      text: nextRole === 'admin' ? 'This account will be able to see and change all platform data.' : 'This account becomes a regular creator.',
+      confirmText: nextRole === 'admin' ? 'Make admin' : 'Make creator',
+      danger: nextRole !== 'admin',
+    });
+    if (!ok) return;
     try {
-      await api(`/api/admin/withdrawals/${id}`, { method: 'PATCH', body });
-      window.location.reload();
-    } catch (error) {
-      notice('admin-wd-status', escapeHtml(error.message), 'error');
-      button.disabled = false;
+      await api(`/api/admin/users/${btn.dataset.role}`, { method: 'PATCH', body: { role: nextRole } });
+      toast('Role updated');
+      renderUsers(panel);
+    } catch (err) {
+      toast(err.message, 'error');
     }
   });
-
-  // Revenue recording
-  const revenueForm = el('revenue-form');
-  if (revenueForm) {
-    revenueForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const submit = revenueForm.querySelector('button[type="submit"]');
-      submit.disabled = true;
-      try {
-        const result = await api('/api/admin/revenue', {
-          method: 'POST',
-          body: {
-            creatorId: el('revenue-creator').value,
-            amount: el('revenue-amount').value.trim(),
-            source: el('revenue-source').value.trim(),
-            note: el('revenue-note').value.trim(),
-          },
-        });
-        notice(
-          'revenue-status',
-          `Recorded ${escapeHtml(result.revenue.grossUsdt)} USDT — creator ${escapeHtml(result.revenue.creatorUsdt)}, platform ${escapeHtml(result.revenue.platformUsdt)}. ${escapeHtml(result.note)}`,
-          'ok',
-        );
-        revenueForm.reset();
-        setTimeout(() => window.location.reload(), 1800);
-      } catch (error) {
-        notice('revenue-status', escapeHtml(error.message), 'error');
-        submit.disabled = false;
-      }
-    });
-  }
 }
 
-/* -------------------------------------------------------------------- live */
+async function renderVideos(panel) {
+  const data = await api('/api/admin/videos');
+  const videos = data.videos || [];
+  panel.innerHTML = `<section class="card">
+    <div class="card-head pad-x"><h2>All videos</h2><span class="muted small">${videos.length} total</span></div>
+    ${
+      videos.length
+        ? `<div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Title</th><th>Creator</th><th>Status</th><th class="num">Views</th><th class="num">Likes</th><th></th></tr></thead>
+            <tbody>${videos
+              .map(
+                (v) => `<tr>
+                  <td>${esc(v.title)}<span class="row-sub">${esc(v.category || 'Other')}</span></td>
+                  <td>${esc((v.creator && v.creator.displayName) || '—')}</td>
+                  <td><span class="pill ${v.status === 'published' ? 'ok' : 'warn'}">${esc(v.status)}</span></td>
+                  <td class="num">${formatCount(v.views)}</td>
+                  <td class="num">${formatCount(v.likes)}</td>
+                  <td class="cell-actions">
+                    <a class="btn sm ghost" href="/watch?v=${esc(v.id)}">View</a>
+                    <button class="btn sm danger" data-del="${esc(v.id)}" aria-label="Delete ${esc(v.title)}">${icon('trash', 15)}</button>
+                  </td>
+                </tr>`
+              )
+              .join('')}</tbody></table></div>`
+        : `<p class="muted pad">No videos uploaded yet.</p>`
+    }
+  </section>`;
 
-export async function live() {
-  await requireUser();
-
-  const root = el('live-root');
-  let config;
-  let sessions = [];
-  try {
-    config = await api('/api/live/config');
-    const result = await api('/api/live/sessions');
-    sessions = result.sessions;
-  } catch (error) {
-    root.innerHTML = `<div class="empty"><strong>Could not load livestream settings</strong>${escapeHtml(error.message)}</div>`;
-    return;
-  }
-
-  root.innerHTML = `
-    <div class="notice ${config.configured ? 'ok' : 'warn'}">
-      <strong>${config.configured ? `Livestream provider: ${escapeHtml(config.provider)}` : 'No livestream provider connected.'}</strong>
-      ${escapeHtml(config.note)}
-      ${
-        config.configured
-          ? ''
-          : `<div class="small" style="margin-top:8px;">
-               To enable real broadcasting, set <span class="mono">LIVE_PROVIDER</span>,
-               <span class="mono">LIVE_INGEST_URL</span> and <span class="mono">LIVE_PLAYBACK_URL_TEMPLATE</span>
-               in Settings → Environment variables. Free-tier option: LiveKit Cloud.
-             </div>`
-      }
-    </div>
-
-    <div class="grid cols-2" style="margin-bottom:24px;">
-      <div class="panel">
-        <h2>Schedule a stream</h2>
-        <p class="hint">Creates a real session record. Going live stays disabled until a provider is configured.</p>
-        <div id="live-status" hidden></div>
-        <form id="live-form">
-          <div class="field">
-            <label for="live-title">Stream title</label>
-            <input id="live-title" type="text" maxlength="120" placeholder="Friday build session" required />
-          </div>
-          <button class="button primary" type="submit">Create session</button>
-        </form>
-      </div>
-
-      <div class="panel">
-        <h2>Camera check</h2>
-        <p class="hint">
-          This previews your own camera in this browser only. It is not broadcast and no data leaves your device.
-        </p>
-        <video id="camera-preview" autoplay muted playsinline style="width:100%;border-radius:14px;background:#050914;aspect-ratio:16/9;"></video>
-        <div class="row" style="margin-top:12px;">
-          <button class="button secondary small" id="camera-start" type="button">Start camera</button>
-          <button class="button ghost small" id="camera-stop" type="button">Stop</button>
-        </div>
-        <div id="camera-status"></div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>Sessions</h2>
-      <p class="hint">${sessions.length ? `${sessions.length} session(s)` : 'No sessions yet.'}</p>
-      ${
-        sessions.length
-          ? `<div class="table-wrap">
-              <table>
-                <thead><tr><th>Title</th><th>Creator</th><th>Status</th><th>Created</th><th>Playback</th><th></th></tr></thead>
-                <tbody>
-                  ${sessions
-                    .map(
-                      (s) => `<tr>
-                        <td>${escapeHtml(s.title)}</td>
-                        <td>${escapeHtml(s.owner)}</td>
-                        <td>${statusPill(s.status)}</td>
-                        <td class="nowrap muted small">${timeAgo(s.createdAt)}</td>
-                        <td class="mono small">${s.playbackUrl ? escapeHtml(s.playbackUrl) : '<span class="muted">none</span>'}</td>
-                        <td class="nowrap">
-                          ${
-                            s.mine && s.status === 'scheduled'
-                              ? `<button class="button primary small" data-live="live" data-id="${s.id}" type="button">Go live</button>`
-                              : ''
-                          }
-                          ${
-                            s.mine && s.status === 'live'
-                              ? `<button class="button danger small" data-live="ended" data-id="${s.id}" type="button">End stream</button>`
-                              : ''
-                          }
-                        </td>
-                      </tr>`,
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-          : '<div class="empty"><strong>Nothing scheduled</strong>Create a session to prepare a broadcast.</div>'
-      }
-    </div>`;
-
-  const liveForm = el('live-form');
-  if (liveForm) {
-    liveForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const submit = liveForm.querySelector('button[type="submit"]');
-      submit.disabled = true;
-      try {
-        await api('/api/live/sessions', { method: 'POST', body: { title: el('live-title').value.trim() } });
-        window.location.reload();
-      } catch (error) {
-        notice('live-status', escapeHtml(error.message), 'error');
-        submit.disabled = false;
-      }
+  panel.addEventListener('click', async (e) => {
+    const id = e.target.closest('[data-del]')?.dataset.del;
+    if (!id) return;
+    const ok = await confirmDialog({
+      title: 'Delete this video?',
+      text: 'This removes the video for everyone. It cannot be undone.',
+      confirmText: 'Delete video',
+      danger: true,
     });
-  }
-
-  root.addEventListener('click', async (event) => {
-    const button = event.target.closest('button[data-live]');
-    if (!button) return;
-    button.disabled = true;
+    if (!ok) return;
     try {
-      await api(`/api/live/sessions/${button.dataset.id}`, { method: 'PATCH', body: { status: button.dataset.live } });
-      window.location.reload();
-    } catch (error) {
-      notice('live-status', escapeHtml(error.message), 'error');
-      button.disabled = false;
+      await api(`/api/videos/${id}`, { method: 'DELETE' });
+      toast('Video deleted');
+      renderVideos(panel);
+    } catch (err) {
+      toast(err.message, 'error');
     }
-  });
-
-  // Local camera preview
-  let stream = null;
-  const preview = el('camera-preview');
-  const startBtn = el('camera-start');
-  const stopBtn = el('camera-stop');
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      stream = null;
-    }
-    if (preview) preview.srcObject = null;
-    notice('camera-status', 'Camera stopped.', '');
-  };
-
-  if (startBtn) {
-    startBtn.addEventListener('click', async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        notice('camera-status', 'This browser does not expose a camera API.', 'error');
-        return;
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        preview.srcObject = stream;
-        notice('camera-status', 'Camera active — local preview only, nothing is uploaded or broadcast.', 'ok');
-      } catch (error) {
-        notice(
-          'camera-status',
-          `Camera unavailable: ${escapeHtml(error.message)}. Permission may be blocked, or no device is connected.`,
-          'error',
-        );
-      }
-    });
-  }
-  if (stopBtn) stopBtn.addEventListener('click', stopCamera);
-  window.addEventListener('pagehide', () => {
-    if (stream) stream.getTracks().forEach((track) => track.stop());
   });
 }
+
+async function renderWithdrawals(panel) {
+  const data = await api('/api/admin/withdrawals');
+  const rows = data.withdrawals || [];
+  panel.innerHTML = `<section class="card">
+    <div class="card-head pad-x"><h2>Withdrawal requests</h2><span class="muted small">${rows.length} total</span></div>
+    ${
+      rows.length
+        ? `<div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Requested</th><th>Creator</th><th class="num">Amount</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${rows
+              .map(
+                (w) => `<tr data-wd="${esc(w.id)}">
+                  <td>${esc(timeAgo(w.createdAt))}</td>
+                  <td>${esc((w.user && w.user.displayName) || '—')}<span class="row-sub">${esc((w.user && w.user.email) || '')}</span></td>
+                  <td class="num">${esc(w.amountUsdt)}</td>
+                  <td class="mono truncate">${esc(w.address)}</td>
+                  <td>${statusPill(w.status)}</td>
+                  <td class="cell-actions">
+                    ${
+                      w.status === 'pending'
+                        ? `<button class="btn sm primary" data-approve="${esc(w.id)}">Approve</button>
+                           <button class="btn sm danger" data-reject="${esc(w.id)}">Reject</button>`
+                        : ''
+                    }
+                    ${
+                      w.status === 'approved'
+                        ? `<button class="btn sm primary" data-pay="${esc(w.id)}">Mark paid</button>`
+                        : ''
+                    }
+                    ${w.txHash ? `<span class="mono tiny truncate">${esc(w.txHash)}</span>` : ''}
+                  </td>
+                </tr>`
+              )
+              .join('')}</tbody></table></div>`
+        : `<p class="muted pad">No withdrawal requests yet.</p>`
+    }
+  </section>`;
+
+  panel.addEventListener('click', async (e) => {
+    const approve = e.target.closest('[data-approve]')?.dataset.approve;
+    const reject = e.target.closest('[data-reject]')?.dataset.reject;
+    const pay = e.target.closest('[data-pay]')?.dataset.pay;
+
+    const act = async (id, body, message) => {
+      try {
+        await api(`/api/admin/withdrawals/${id}`, { method: 'PATCH', body });
+        toast(message);
+        renderWithdrawals(panel);
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    };
+
+    if (approve) {
+      const ok = await confirmDialog({ title: 'Approve this request?', text: 'Approval marks it ready for payout. No transfer is sent automatically.', confirmText: 'Approve' });
+      if (ok) act(approve, { status: 'approved' }, 'Request approved');
+    } else if (reject) {
+      const ok = await confirmDialog({ title: 'Reject this request?', text: 'The amount is released back to the creator.', confirmText: 'Reject', danger: true });
+      if (ok) act(reject, { status: 'rejected' }, 'Request rejected');
+    } else if (pay) {
+      const txHash = window.prompt('Transaction hash for the USDT BEP20 transfer (leave empty to record without one):', '');
+      if (txHash === null) return;
+      act(pay, { status: 'paid', txHash: txHash.trim() }, 'Marked as paid');
+    }
+  });
+}
+
+async function renderRevenue(panel) {
+  const [usersData, videosData] = await Promise.all([
+    api('/api/admin/users'),
+    api('/api/admin/videos').catch(() => ({ videos: [] })),
+  ]);
+  const users = usersData.users || [];
+  const videos = videosData.videos || [];
+
+  panel.innerHTML = `<section class="card pad">
+    <div class="card-head"><h2>Record a real payment</h2></div>
+    <p class="hint mb-8">Only record money that was actually received. The 60/40 split is applied server-side in integer micro-USDT.</p>
+    <form id="rev-form" class="form-grid" novalidate>
+      <div class="field">
+        <label for="creatorId">Creator</label>
+        <select class="select" id="creatorId" name="creatorId" required>
+          <option value="">Choose a creator…</option>
+          ${users.map((u) => `<option value="${esc(u.id)}">${esc(u.displayName)} — ${esc(u.email)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label for="amount">Gross amount (USDT)</label>
+        <input class="input" id="amount" name="amount" inputmode="decimal" placeholder="0.00" required>
+      </div>
+      <div class="field">
+        <label for="source">Source</label>
+        <input class="input" id="source" name="source" maxlength="60" placeholder="e.g. sponsor payment" required>
+      </div>
+      <div class="field">
+        <label for="videoId">Related video (optional)</label>
+        <select class="select" id="videoId" name="videoId">
+          <option value="">No specific video</option>
+          ${videos.map((v) => `<option value="${esc(v.id)}">${esc(v.title)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="alert error hidden" id="rev-error" role="alert"></div>
+      <button class="btn primary" type="submit">${icon('wallet', 16)} Record payment</button>
+    </form>
+  </section>`;
+
+  document.getElementById('rev-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const err = document.getElementById('rev-error');
+    err.classList.add('hidden');
+    try {
+      await api('/api/admin/revenue', {
+        method: 'POST',
+        body: {
+          creatorId: f.creatorId.value,
+          amount: f.amount.value.trim(),
+          source: f.source.value.trim(),
+          videoId: f.videoId.value || null,
+        },
+      });
+      toast('Payment recorded');
+      renderRevenue(panel);
+    } catch (error) {
+      err.textContent = error.message;
+      err.classList.remove('hidden');
+    }
+  });
+}
+
+mountShell({ view: 'admin' });
+load();
