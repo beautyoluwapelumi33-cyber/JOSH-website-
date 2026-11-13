@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Join JOSH | Create an account</title>
+    <link rel="stylesheet" href="/assets/css/platform.css" />
+    <script type="module" src="/assets/js/app.js"></script>
+  </head>
+  <body data-page="signup" data-nav="">
+    <header>
+      <div class="container">
+        <nav>
+          <a class="brand" href="/"><span class="brand-mark">J</span><span>JOSH</span></a>
+          <div class="nav-links">
+            <a href="/feed">Feed</a>
+            <a href="/live">Live</a>
+            <a href="/studio">Studio</a>
+            <a href="/earnings">Earnings</a>
+          </div>
+          <div class="nav-auth" id="nav-auth"></div>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="auth-shell">
+        <div class="panel">
+          <p class="eyebrow">Create an account</p>
+          <h1 style="margin-top:0;">Join JOSH</h1>
+          <div id="signup-status" hidden></div>
+          <form id="signup-form">
+            <div class="field">
+              <label for="display-name">Display name</label>
+              <input id="display-name" name="displayName" type="text" maxlength="40" autocomplete="nickname" required />
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required />
+            </div>
+            <div class="field">
+              <label for="password">Password</label>
+              <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+              <span class="help">At least 8 characters.</span>
+            </div>
+            <button class="button primary" type="submit" style="width: 100%;">Create account</button>
+          </form>
+          <p class="small muted" style="margin:18px 0 0;">
+            Already have an account? <a href="/login">Sign in</a>
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="page">
+      <div class="container small muted">© 2026 JOSH · Built for momentum</div>
+    </footer>
+  </body>
+</html>

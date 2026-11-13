@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in | JOSH</title>
+    <link rel="stylesheet" href="/assets/css/platform.css" />
+    <script type="module" src="/assets/js/app.js"></script>
+  </head>
+  <body data-page="login" data-nav="">
+    <header>
+      <div class="container">
+        <nav>
+          <a class="brand" href="/"><span class="brand-mark">J</span><span>JOSH</span></a>
+          <div class="nav-links">
+            <a href="/feed">Feed</a>
+            <a href="/live">Live</a>
+            <a href="/studio">Studio</a>
+            <a href="/earnings">Earnings</a>
+          </div>
+          <div class="nav-auth" id="nav-auth"></div>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="auth-shell">
+        <div class="panel">
+          <p class="eyebrow">Welcome back</p>
+          <h1 style="margin-top:0;">Sign in to JOSH</h1>
+          <div id="login-status" hidden></div>
+          <form id="login-form">
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required />
+            </div>
+            <div class="field">
+              <label for="password">Password</label>
+              <input id="password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+            <button class="button primary" type="submit" style="width: 100%;">Sign in</button>
+          </form>
+          <p class="small muted" style="margin:18px 0 0;">
+            No account yet? <a href="/signup">Create one</a>
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="page">
+      <div class="container small muted">© 2026 JOSH · Built for momentum</div>
+    </footer>
+  </body>
+</html>
