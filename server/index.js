@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { loadDb, saveDb, UPLOAD_DIR, dataDir } from './store.js';
@@ -54,7 +55,6 @@ const db = loadDb();
 
 const nowIso = () => new Date().toISOString();
 const id = (prefix) => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
-import crypto from 'node:crypto';
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
