@@ -10,7 +10,7 @@ ENV NODE_ENV=production \
 COPY package.json ./
 COPY server ./server
 COPY assets ./assets
-COPY index.html feed.html watch.html upload.html studio.html earnings.html admin.html live.html login.html signup.html ./
+COPY *.html ./
 
 RUN mkdir -p /app/data/uploads && chown -R node:node /app
 
