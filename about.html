@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About JOSH</title>
+    <meta name="description" content="JOSH is a creator video platform: publish videos and Shorts, see real analytics and withdraw earnings in USDT BEP20." />
+    <meta name="theme-color" content="#0a0a0e" />
+    <link rel="stylesheet" href="/assets/css/platform.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="topbar" style="position:static;border-radius:16px;margin:20px 0">
+        <a class="brand" href="/" aria-label="JOSH home">
+          <span class="brand-mark"></span><span class="brand-name">JO<b>SH</b></span>
+        </a>
+        <div class="grow"></div>
+        <a class="btn ghost" href="/feed">Browse videos</a>
+        <a class="btn primary" href="/signup">Create account</a>
+      </header>
+
+      <section class="hero">
+        <h1>JOSH is a creator-first video platform.</h1>
+        <p class="section-sub">Watch, upload and grow. Creators keep 60% of recorded revenue, the platform keeps 40% — calculated in integer micro-USDT so rounding never invents or loses a unit.</p>
+        <div class="row gap-12 mt-16">
+          <a class="btn primary" href="/upload">Upload a video</a>
+          <a class="btn ghost" href="/studio">Open Creator Studio</a>
+        </div>
+      </section>
+
+      <section class="feature-grid">
+        <article class="feature">
+          <h3>Real numbers only</h3>
+          <p>Views are counted when playback actually starts, once per viewer per video. Likes, comments and subscribers are stored records. There are no placeholder videos and no estimated earnings anywhere in the interface.</p>
+        </article>
+        <article class="feature">
+          <h3>Creator Studio</h3>
+          <p>Every upload with its genuine views, likes and comments, plus a 14-day view chart built from real view timestamps. Drafts stay private until you publish them.</p>
+        </article>
+        <article class="feature">
+          <h3>Earnings and payouts</h3>
+          <p>A transparent 60/40 split, a revenue ledger that only shows recorded payments, and USDT BEP20 withdrawal requests from 0.5 USDT with administrator review.</p>
+        </article>
+        <article class="feature">
+          <h3>Honest integrations</h3>
+          <p>Payments are not connected, so the platform states that plainly instead of implying money is moving. Livestreaming shows a setup state until a provider is configured.</p>
+        </article>
+      </section>
+
+      <section class="card pad mt-16">
+        <h2>Prepared for Supabase</h2>
+        <p class="muted">The database schema, row-level security policies and storage rules for permanent accounts and video uploads are included in <code class="mono">supabase/schema.sql</code>. Until Supabase is connected, accounts and files live in this deployment's own store.</p>
+        <div class="row gap-12 mt-16">
+          <a class="btn ghost" href="/">Go to the feed</a>
+          <a class="btn ghost" href="/login">Sign in</a>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

@@ -266,6 +266,7 @@ async function renderWithdrawals(panel) {
     const reject = e.target.closest('[data-reject]')?.dataset.reject;
     const pay = e.target.closest('[data-pay]')?.dataset.pay;
 
+    /* The server expects { action: 'approve' | 'reject' | 'paid' }. */
     const act = async (id, body, message) => {
       try {
         await api(`/api/admin/withdrawals/${id}`, { method: 'PATCH', body });
@@ -278,14 +279,19 @@ async function renderWithdrawals(panel) {
 
     if (approve) {
       const ok = await confirmDialog({ title: 'Approve this request?', text: 'Approval marks it ready for payout. No transfer is sent automatically.', confirmText: 'Approve' });
-      if (ok) act(approve, { status: 'approved' }, 'Request approved');
+      if (ok) act(approve, { action: 'approve' }, 'Request approved');
     } else if (reject) {
       const ok = await confirmDialog({ title: 'Reject this request?', text: 'The amount is released back to the creator.', confirmText: 'Reject', danger: true });
-      if (ok) act(reject, { status: 'rejected' }, 'Request rejected');
+      if (ok) act(reject, { action: 'reject', note: '' }, 'Request rejected');
     } else if (pay) {
-      const txHash = window.prompt('Transaction hash for the USDT BEP20 transfer (leave empty to record without one):', '');
+      const txHash = window.prompt('Transaction hash of the USDT BEP20 transfer (0x followed by 64 hex characters):', '');
       if (txHash === null) return;
-      act(pay, { status: 'paid', txHash: txHash.trim() }, 'Marked as paid');
+      const clean = txHash.trim();
+      if (!/^0x[0-9a-fA-F]{64}$/.test(clean)) {
+        toast('Enter the BEP20 transaction hash (0x + 64 hex characters).', 'error');
+        return;
+      }
+      act(pay, { action: 'paid', txHash: clean }, 'Marked as paid');
     }
   });
 }
