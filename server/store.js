@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Local data store for the no-Supabase build.
@@ -69,6 +70,5 @@ export function dbFile() {
 }
 
 export function uid(prefix = '') {
-  const { randomUUID } = require('node:crypto');
   return `${prefix}${randomUUID()}`;
 }
