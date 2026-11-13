@@ -3,40 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Earnings | JOSH</title>
-    <meta name="description" content="Creator earnings and USDT BEP20 withdrawals on JOSH." />
+    <title>Earnings · JOSH</title>
+    <meta name="theme-color" content="#0a0a0e" />
     <link rel="stylesheet" href="/assets/css/platform.css" />
-    <script type="module" src="/assets/js/app.js"></script>
   </head>
-  <body data-page="earnings" data-nav="/earnings">
-    <header>
-      <div class="container">
-        <nav>
-          <a class="brand" href="/"><span class="brand-mark">J</span><span>JOSH</span></a>
-          <div class="nav-links">
-            <a href="/feed">Feed</a>
-            <a href="/live">Live</a>
-            <a href="/studio">Studio</a>
-            <a href="/earnings">Earnings</a>
-          </div>
-          <div class="nav-auth" id="nav-auth"></div>
-        </nav>
-      </div>
-    </header>
-
-    <main class="page">
-      <div class="page-head">
-        <div>
-          <p class="eyebrow">Revenue sharing</p>
-          <h1>Earnings</h1>
-          <p class="muted" style="margin:0;">60% creator · 40% platform, applied only to payments that actually happened.</p>
-        </div>
-      </div>
-      <div id="earnings-root"></div>
-    </main>
-
-    <footer class="page">
-      <div class="container small muted">© 2026 JOSH · Built for momentum</div>
-    </footer>
+  <body data-view="earnings">
+    <div id="app-chrome"></div>
+    <main class="main" id="view" aria-live="polite"></main>
+    <script type="module" src="/assets/js/earnings.js"></script>
   </body>
 </html>

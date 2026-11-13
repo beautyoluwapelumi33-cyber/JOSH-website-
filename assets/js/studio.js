@@ -1,285 +1,191 @@
+/**
+ * JOSH — Creator Studio.
+ * Real per-video numbers from /api/studio/summary. Publishing, deleting and
+ * navigation all go through the existing endpoints; no metric is simulated.
+ */
 import {
+  mountShell,
   api,
-  state,
-  requireUser,
-  compact,
+  esc,
+  icon,
+  toast,
+  confirmDialog,
+  setPageTitle,
+  formatCount,
   timeAgo,
-  escapeHtml,
-  el,
-  statusPill,
-  notice,
-} from './api.js';
-import { formatDuration } from './views.js';
+  formatDuration,
+  thumbURL,
+  emptyState,
+  requireAuth,
+} from './core.js';
 
-/* ------------------------------------------------------------------ studio */
+const view = document.getElementById('view');
 
-export async function studio() {
-  const user = await requireUser();
+function kpi(label, value, hint) {
+  return `<div class="kpi">
+    <span class="kpi-label">${esc(label)}</span>
+    <strong class="kpi-value">${esc(value)}</strong>
+    ${hint ? `<span class="kpi-hint">${esc(hint)}</span>` : ''}
+  </div>`;
+}
+
+function chart(days) {
+  const max = Math.max(1, ...days.map((d) => d.views));
+  return `<div class="chart-bars" role="img" aria-label="Views per day over the last 14 days">
+    ${days
+      .map((d) => {
+        const h = Math.round((d.views / max) * 100);
+        const day = new Date(d.date + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return `<div class="bar-col" title="${esc(day)} — ${d.views} view${d.views === 1 ? '' : 's'}">
+          <span class="bar-fill" style="height:${Math.max(d.views > 0 ? 4 : 1, h)}%"></span>
+          <span class="bar-day">${esc(day.split(' ')[1] || '')}</span>
+        </div>`;
+      })
+      .join('')}
+  </div>`;
+}
+
+function statusPill(status) {
+  return `<span class="pill ${status === 'published' ? 'ok' : 'warn'}">${esc(status)}</span>`;
+}
+
+function row(v) {
+  const thumb = thumbURL(v.id, v.hasThumbnail);
+  return `<tr data-video="${esc(v.id)}">
+    <td class="cell-video">
+      <a class="row-video" href="/watch?v=${esc(v.id)}">
+        <span class="thumb-mini">${thumb ? `<img src="${esc(thumb)}" alt="">` : `<span class="thumb-mini-empty">${icon('film', 16)}</span>`}
+          ${v.durationSec ? `<span class="thumb-time">${formatDuration(v.durationSec)}</span>` : ''}
+        </span>
+        <span class="row-meta">
+          <span class="row-title">${esc(v.title)}</span>
+          <span class="row-sub">${esc(v.category || 'Other')} · ${esc(timeAgo(v.publishedAt || v.createdAt))}</span>
+        </span>
+      </a>
+    </td>
+    <td>${statusPill(v.status)}</td>
+    <td class="num">${formatCount(v.views)}</td>
+    <td class="num">${formatCount(v.likes)}</td>
+    <td class="num">${formatCount(v.comments)}</td>
+    <td class="cell-actions">
+      ${v.status === 'draft' ? `<button class="btn sm primary" data-publish="${esc(v.id)}">Publish</button>` : ''}
+      <a class="btn sm ghost" href="/watch?v=${esc(v.id)}">View</a>
+      <button class="btn sm danger" data-delete="${esc(v.id)}" aria-label="Delete ${esc(v.title)}">${icon('trash', 15)}</button>
+    </td>
+  </tr>`;
+}
+
+async function load() {
+  const user = await requireAuth();
   if (!user) return;
+  setPageTitle('Creator Studio');
 
-  const root = el('studio-root');
+  view.innerHTML = `<div class="page-head">
+      <div>
+        <h1>Creator Studio</h1>
+        <p class="sub">Everything you have uploaded, with the numbers it actually earned.</p>
+      </div>
+      <div class="page-actions">
+        <a class="btn ghost" href="/earnings">${icon('wallet', 16)} Earnings</a>
+        <a class="btn primary" href="/upload">${icon('upload', 16)} Upload video</a>
+      </div>
+    </div>
+    <div class="skeleton-block"></div>`;
+
   let data;
   try {
     data = await api('/api/studio/summary');
-  } catch (error) {
-    root.innerHTML = `<div class="empty"><strong>Could not load your studio</strong>${escapeHtml(error.message)}</div>`;
+  } catch (err) {
+    view.innerHTML = `<div class="page-head"><h1>Creator Studio</h1></div>`;
+    view.appendChild(emptyState({ icon: 'alert', title: 'Could not load your studio', text: err.message }));
     return;
   }
 
-  const { totals, dailyViews, videos } = data;
-  const peak = Math.max(1, ...dailyViews.map((d) => d.views));
+  const t = data.totals || {};
+  const videos = data.videos || [];
+  const days = data.dailyViews || [];
 
-  root.innerHTML = `
-    <div class="stats" style="margin-bottom:24px;">
-      <div class="stat"><strong>${compact(totals.videos)}</strong><span>Videos</span></div>
-      <div class="stat"><strong>${compact(totals.published)}</strong><span>Published</span></div>
-      <div class="stat"><strong>${compact(totals.views)}</strong><span>Views</span></div>
-      <div class="stat"><strong>${compact(totals.likes)}</strong><span>Likes</span></div>
-      <div class="stat"><strong>${compact(totals.comments)}</strong><span>Comments</span></div>
+  view.innerHTML = `<div class="page-head">
+      <div>
+        <h1>Creator Studio</h1>
+        <p class="sub">Everything you have uploaded, with the numbers it actually earned.</p>
+      </div>
+      <div class="page-actions">
+        <a class="btn ghost" href="/earnings">${icon('wallet', 16)} Earnings</a>
+        <a class="btn primary" href="/upload">${icon('upload', 16)} Upload video</a>
+      </div>
     </div>
 
-    <div class="panel" style="margin-bottom:24px;">
-      <div class="spread">
-        <div>
-          <h2>Views, last 14 days</h2>
-          <p class="hint" style="margin-bottom:0;">Recorded from real playback starts, de-duplicated per viewer for 30 minutes.</p>
-        </div>
-        <span class="pill">${compact(totals.views)} total</span>
-      </div>
-      <div class="chart">
-        ${dailyViews
-          .map(
-            (d) => `<div class="bar" style="height:${Math.round((d.views / peak) * 100)}%" title="${d.views} views on ${d.date}">
-              <span>${d.date.slice(8)}</span></div>`,
-          )
-          .join('')}
-      </div>
-      <div style="height:22px;"></div>
+    <div class="kpi-grid">
+      ${kpi('Videos', formatCount(t.videos || 0), `${t.published || 0} published`)}
+      ${kpi('Views', formatCount(t.views || 0), 'all time')}
+      ${kpi('Likes', formatCount(t.likes || 0), 'all time')}
+      ${kpi('Comments', formatCount(t.comments || 0), 'all time')}
+      ${kpi('Drafts', formatCount(t.drafts || 0), 'not public yet')}
     </div>
 
-    <div class="panel">
-      <div class="spread" style="margin-bottom:16px;">
-        <div>
-          <h2>Your videos</h2>
-          <p class="hint" style="margin-bottom:0;">Everything here is measured from your own uploads.</p>
-        </div>
-        <a class="button primary small" href="/upload">Upload video</a>
+    <section class="card pad">
+      <div class="card-head">
+        <h2>Views — last 14 days</h2>
+        <span class="muted small">${formatCount(days.reduce((n, d) => n + d.views, 0))} views in this period</span>
+      </div>
+      ${chart(days)}
+    </section>
+
+    <section class="card">
+      <div class="card-head pad-x">
+        <h2>Your videos</h2>
+        <span class="muted small">${videos.length} total</span>
       </div>
       ${
         videos.length
-          ? `<div class="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Video</th><th>Status</th><th>Views</th><th>Likes</th><th>Comments</th><th>Uploaded</th><th></th></tr>
-                </thead>
-                <tbody>
-                  ${videos
-                    .map(
-                      (v) => `
-                    <tr data-video="${v.id}">
-                      <td>
-                        <a href="/watch?v=${v.id}"><strong>${escapeHtml(v.title)}</strong></a>
-                        ${v.durationSec ? `<div class="small muted">${formatDuration(v.durationSec)}</div>` : ''}
-                      </td>
-                      <td>${statusPill(v.status)}</td>
-                      <td class="amount">${compact(v.views)}</td>
-                      <td class="amount">${compact(v.likes)}</td>
-                      <td class="amount">${compact(v.comments)}</td>
-                      <td class="nowrap muted small">${timeAgo(v.createdAt)}</td>
-                      <td class="nowrap">
-                        ${v.status === 'draft' ? `<button class="button secondary small" data-action="publish" data-id="${v.id}" type="button">Publish</button>` : ''}
-                        <button class="button danger small" data-action="delete" data-id="${v.id}" type="button">Delete</button>
-                      </td>
-                    </tr>`,
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-          : `<div class="empty">
-              <strong>You have not uploaded anything yet</strong>
-              Your videos, views and engagement will appear here as soon as you publish.
-              <div style="margin-top:14px;"><a class="button primary" href="/upload">Upload your first video</a></div>
-            </div>`
+          ? `<div class="table-wrap"><table class="data-table">
+              <thead><tr>
+                <th>Video</th><th>Status</th><th class="num">Views</th><th class="num">Likes</th><th class="num">Comments</th><th></th>
+              </tr></thead>
+              <tbody>${videos.map(row).join('')}</tbody>
+            </table></div>`
+          : emptyState({
+              icon: 'film',
+              title: 'No videos yet',
+              text: 'Upload your first video and this table fills with real views, likes and comments.',
+              action: `<a class="btn primary" href="/upload">Upload a video</a>`,
+            })
       }
-    </div>
-    <div id="studio-error"></div>`;
+    </section>`;
 
-  root.addEventListener('click', async (event) => {
-    const button = event.target.closest('button[data-action]');
-    if (!button) return;
-    const { action, id } = button.dataset;
+  view.addEventListener('click', async (e) => {
+    const publishId = e.target.closest('[data-publish]')?.dataset.publish;
+    const deleteId = e.target.closest('[data-delete]')?.dataset.delete;
 
-    if (action === 'publish') {
-      button.disabled = true;
+    if (publishId) {
       try {
-        await api(`/api/videos/${id}/publish`, { method: 'POST' });
-        window.location.reload();
-      } catch (error) {
-        notice('studio-error', escapeHtml(error.message), 'error');
-        button.disabled = false;
+        await api(`/api/videos/${publishId}/publish`, { method: 'POST' });
+        toast('Video published');
+        load();
+      } catch (err) {
+        toast(err.message, 'error');
       }
+      return;
     }
-
-    if (action === 'delete') {
-      if (!window.confirm('Delete this video permanently? Views and comments are removed too.')) return;
-      button.disabled = true;
+    if (deleteId) {
+      const ok = await confirmDialog({
+        title: 'Delete this video?',
+        text: 'The video and its thumbnail are removed permanently. Views and comments on it are lost.',
+        confirmText: 'Delete video',
+        danger: true,
+      });
+      if (!ok) return;
       try {
-        await api(`/api/videos/${id}`, { method: 'DELETE' });
-        window.location.reload();
-      } catch (error) {
-        notice('studio-error', escapeHtml(error.message), 'error');
-        button.disabled = false;
+        await api(`/api/videos/${deleteId}`, { method: 'DELETE' });
+        toast('Video deleted');
+        load();
+      } catch (err) {
+        toast(err.message, 'error');
       }
     }
   });
 }
 
-/* ---------------------------------------------------------------- earnings */
-
-export async function earnings() {
-  const user = await requireUser();
-  if (!user) return;
-
-  const root = el('earnings-root');
-  let data;
-  try {
-    data = await api('/api/earnings/summary');
-  } catch (error) {
-    root.innerHTML = `<div class="empty"><strong>Could not load earnings</strong>${escapeHtml(error.message)}</div>`;
-    return;
-  }
-
-  const { totals, ledger, withdrawals, shares, payments, minimumWithdrawalUsdt } = data;
-
-  root.innerHTML = `
-    <div class="notice warn">
-      <strong>Payments are not active.</strong>
-      ${escapeHtml(payments.note)} Nothing below is an estimate or a projection — every figure comes from a payment an administrator recorded.
-    </div>
-
-    <div class="stats" style="margin-bottom:24px;">
-      <div class="stat"><strong>${escapeHtml(totals.grossUsdt)}</strong><span>Gross revenue (USDT)</span></div>
-      <div class="stat"><strong>${escapeHtml(totals.creatorUsdt)}</strong><span>Your 60% share</span></div>
-      <div class="stat"><strong>${escapeHtml(totals.platformUsdt)}</strong><span>Platform 40%</span></div>
-      <div class="stat"><strong>${escapeHtml(totals.availableUsdt)}</strong><span>Available to withdraw</span></div>
-    </div>
-
-    <div class="grid cols-2" style="margin-bottom:24px;">
-      <div class="panel">
-        <h2>Revenue split</h2>
-        <p class="hint">Applied to every recorded payment, rounded down to the micro-unit so nothing is invented.</p>
-        <div class="row" style="justify-content:space-between;margin-bottom:10px;">
-          <span class="small muted">Creator</span><span class="amount">${(shares.creatorBps / 100).toFixed(0)}%</span>
-        </div>
-        <div class="progress"><span style="width:${shares.creatorBps / 100}%;"></span></div>
-        <div class="row" style="justify-content:space-between;margin:16px 0 10px;">
-          <span class="small muted">Platform</span><span class="amount">${(shares.platformBps / 100).toFixed(0)}%</span>
-        </div>
-        <div class="progress"><span style="width:${shares.platformBps / 100}%;background:linear-gradient(90deg,#22c55e,#4ade80);"></span></div>
-      </div>
-
-      <div class="panel">
-        <h2>Withdraw USDT</h2>
-        <p class="hint">Minimum ${escapeHtml(minimumWithdrawalUsdt)} USDT. BEP20 (BNB Smart Chain) only.</p>
-        <div id="withdraw-status" hidden></div>
-        <form id="withdraw-form">
-          <div class="field">
-            <label for="withdraw-amount">Amount (USDT)</label>
-            <input id="withdraw-amount" name="amount" type="text" inputmode="decimal" placeholder="${escapeHtml(minimumWithdrawalUsdt)}" required />
-            <span class="help">Available: ${escapeHtml(totals.availableUsdt)} USDT</span>
-          </div>
-          <div class="field">
-            <label for="withdraw-address">BEP20 wallet address</label>
-            <input id="withdraw-address" name="address" type="text" placeholder="0x…" required autocomplete="off" spellcheck="false" />
-            <span class="help">0x followed by 40 hexadecimal characters. Double-check it — transfers cannot be reversed.</span>
-          </div>
-          <button class="button primary" type="submit" id="withdraw-submit">Request withdrawal</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-bottom:24px;">
-      <h2>Revenue ledger</h2>
-      <p class="hint">One row per payment that actually happened.</p>
-      ${
-        ledger.length
-          ? `<div class="table-wrap">
-              <table>
-                <thead><tr><th>Date</th><th>Source</th><th>Gross</th><th>Your 60%</th><th>Platform 40%</th></tr></thead>
-                <tbody>
-                  ${ledger
-                    .map(
-                      (row) => `<tr>
-                        <td class="nowrap muted small">${timeAgo(row.createdAt)}</td>
-                        <td>${escapeHtml(row.source)}${row.note ? `<div class="small muted">${escapeHtml(row.note)}</div>` : ''}</td>
-                        <td class="amount">${escapeHtml(row.grossUsdt)}</td>
-                        <td class="amount">${escapeHtml(row.creatorUsdt)}</td>
-                        <td class="amount">${escapeHtml(row.platformUsdt)}</td>
-                      </tr>`,
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-          : `<div class="empty">
-              <strong>No revenue recorded yet</strong>
-              Earnings appear here only when a real payment is received and recorded by an administrator.
-              No payment provider is connected, so there is nothing to report — and nothing is simulated.
-            </div>`
-      }
-    </div>
-
-    <div class="panel">
-      <h2>Withdrawal requests</h2>
-      <p class="hint">A request is a claim on your balance. Money moves only when an administrator settles it and records the on-chain transaction hash.</p>
-      ${
-        withdrawals.length
-          ? `<div class="table-wrap">
-              <table>
-                <thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Address</th><th>Transaction</th></tr></thead>
-                <tbody>
-                  ${withdrawals
-                    .map(
-                      (w) => `<tr>
-                        <td class="nowrap muted small">${timeAgo(w.createdAt)}</td>
-                        <td class="amount">${escapeHtml(w.amountUsdt)}</td>
-                        <td>${statusPill(w.status)}</td>
-                        <td class="mono">${escapeHtml(w.address.slice(0, 10))}…${escapeHtml(w.address.slice(-6))}</td>
-                        <td class="mono">${w.txHash ? `${escapeHtml(w.txHash.slice(0, 12))}…` : '<span class="muted">not sent</span>'}</td>
-                      </tr>`,
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-          : '<div class="empty"><strong>No withdrawal requests</strong>Your requests and their settlement status will be listed here.</div>'
-      }
-    </div>`;
-
-  const form = el('withdraw-form');
-  const status = el('withdraw-status');
-  if (form) {
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const button = el('withdraw-submit');
-      button.disabled = true;
-      try {
-        const result = await api('/api/withdrawals', {
-          method: 'POST',
-          body: { amount: el('withdraw-amount').value.trim(), address: el('withdraw-address').value.trim() },
-        });
-        notice(
-          status,
-          `Request for ${escapeHtml(result.withdrawal.amountUsdt)} USDT recorded with status <strong>pending</strong>. ${escapeHtml(result.note || '')}`,
-          'ok',
-        );
-        form.reset();
-        setTimeout(() => window.location.reload(), 2200);
-      } catch (error) {
-        notice(status, escapeHtml(error.message), 'error');
-        button.disabled = false;
-      }
-    });
-  }
-}
+mountShell({ view: 'studio' });
+load();
