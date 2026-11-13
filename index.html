@@ -8,6 +8,7 @@
       name="description"
       content="JOSH is where ideas turn into action, growth, and results."
     />
+    <link rel="stylesheet" href="/assets/css/platform.css" />
     <style>
       :root {
         --bg: #0b1020;
@@ -435,10 +436,14 @@
             <a href="#about">About</a>
             <a href="#solutions">Solutions</a>
             <a href="#results">Results</a>
+            <a href="/feed">Feed</a>
+            <a href="/live">Live</a>
+            <a href="/studio">Studio</a>
+            <a href="/earnings">Earnings</a>
             <a href="#contact">Contact</a>
           </div>
 
-          <a href="#contact" class="nav-button">Start now</a>
+          <div class="nav-auth" id="nav-auth"></div>
         </nav>
       </div>
     </header>
@@ -455,24 +460,27 @@
           </p>
 
           <div class="cta-row">
-            <a class="button primary" href="#contact">Let’s talk</a>
-            <a class="button secondary" href="#solutions">See how it works</a>
+            <a class="button primary" href="/signup">Join JOSH</a>
+            <a class="button secondary" href="/feed">Watch videos</a>
           </div>
 
           <div class="stats" id="results">
             <div class="stat">
-              <strong>12k+</strong>
-              <span>People reached</span>
+              <strong data-stat="videos">—</strong>
+              <span>Videos published</span>
             </div>
             <div class="stat">
-              <strong>4.9/5</strong>
-              <span>Client satisfaction</span>
+              <strong data-stat="creators">—</strong>
+              <span>Creators</span>
             </div>
             <div class="stat">
-              <strong>3x</strong>
-              <span>Average growth</span>
+              <strong data-stat="views">—</strong>
+              <span>Video views</span>
             </div>
           </div>
+          <p class="small muted" id="stats-note" style="margin: 14px 0 0;">
+            Loading live counters…
+          </p>
         </div>
 
         <div class="visual" aria-hidden="true">
@@ -482,8 +490,8 @@
             <div class="orbit two"></div>
 
             <div class="float-card top">
-              <strong>+68%</strong>
-              <span>Engagement uplift</span>
+              <strong>Live</strong>
+              <span>Creator video feed</span>
             </div>
 
             <div class="float-card bottom">
