@@ -25,6 +25,8 @@ const SECTIONS = [
   'revenue',
   'withdrawals',
   'live',
+  'subscriptions',
+  'history',
 ];
 
 let db = null;
