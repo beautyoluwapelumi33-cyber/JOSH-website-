@@ -689,6 +689,14 @@ route('GET', '/api/history', async (req, res) => {
   sendJson(res, 200, { videos });
 });
 
+route('DELETE', '/api/history', async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  db.history = (db.history || []).filter((h) => h.userId !== user.id);
+  saveDb();
+  sendJson(res, 200, { ok: true, videos: [] });
+});
+
 route('GET', '/api/notifications', async (req, res) => {
   const user = requireUser(req, res);
   if (!user) return;

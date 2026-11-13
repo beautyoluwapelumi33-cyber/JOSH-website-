@@ -3,73 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upload a video | JOSH</title>
-    <meta name="description" content="Upload a video to JOSH." />
+    <title>Upload · JOSH</title>
+    <meta name="theme-color" content="#0a0a0e" />
     <link rel="stylesheet" href="/assets/css/platform.css" />
-    <script type="module" src="/assets/js/app.js"></script>
   </head>
-  <body data-page="upload" data-nav="/upload">
-    <header>
-      <div class="container">
-        <nav>
-          <a class="brand" href="/"><span class="brand-mark">J</span><span>JOSH</span></a>
-          <div class="nav-links">
-            <a href="/feed">Feed</a>
-            <a href="/live">Live</a>
-            <a href="/studio">Studio</a>
-            <a href="/earnings">Earnings</a>
-          </div>
-          <div class="nav-auth" id="nav-auth"></div>
-        </nav>
-      </div>
-    </header>
-
-    <main class="page">
-      <div class="page-head">
-        <div>
-          <p class="eyebrow">Creator upload</p>
-          <h1>Publish a video</h1>
-          <p class="muted" style="margin:0;">Your file is stored on this platform and streamed back with seek support.</p>
-        </div>
-      </div>
-
-      <div class="grid cols-2">
-        <div class="panel">
-          <div id="upload-status" hidden></div>
-          <form id="upload-form">
-            <div class="field">
-              <label for="video-file">Video file</label>
-              <input id="video-file" type="file" accept="video/*" required />
-              <span class="help" id="upload-limit">Choose an MP4 or WebM file.</span>
-            </div>
-            <div class="field">
-              <label for="video-title">Title</label>
-              <input id="video-title" type="text" maxlength="120" required placeholder="What is this video about?" />
-            </div>
-            <div class="field">
-              <label for="video-description">Description</label>
-              <textarea id="video-description" maxlength="2000" placeholder="Optional context for viewers."></textarea>
-            </div>
-
-            <div class="progress" id="upload-progress" hidden><span id="upload-progress-fill" style="width: 0%"></span></div>
-
-            <button class="button primary" type="submit" id="upload-submit">Upload video</button>
-          </form>
-        </div>
-
-        <div class="panel">
-          <h2>Thumbnail preview</h2>
-          <p class="hint">
-            Captured from your own file in the browser — the first frame after a third of the video.
-            Nothing is uploaded until you press upload.
-          </p>
-          <div id="thumb-preview"></div>
-        </div>
-      </div>
-    </main>
-
-    <footer class="page">
-      <div class="container small muted">© 2026 JOSH · Built for momentum</div>
-    </footer>
+  <body data-view="upload">
+    <div id="app-chrome"></div>
+    <main class="main" id="view" aria-live="polite"></main>
+    <script type="module" src="/assets/js/upload.js"></script>
   </body>
 </html>
