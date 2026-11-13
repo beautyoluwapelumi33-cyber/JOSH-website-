@@ -3,52 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign in | JOSH</title>
+    <title>Sign in · JOSH</title>
+    <meta name="theme-color" content="#0a0a0e" />
     <link rel="stylesheet" href="/assets/css/platform.css" />
-    <script type="module" src="/assets/js/app.js"></script>
   </head>
-  <body data-page="login" data-nav="">
-    <header>
-      <div class="container">
-        <nav>
-          <a class="brand" href="/"><span class="brand-mark">J</span><span>JOSH</span></a>
-          <div class="nav-links">
-            <a href="/feed">Feed</a>
-            <a href="/live">Live</a>
-            <a href="/studio">Studio</a>
-            <a href="/earnings">Earnings</a>
-          </div>
-          <div class="nav-auth" id="nav-auth"></div>
-        </nav>
-      </div>
-    </header>
-
-    <main class="page">
-      <div class="auth-shell">
-        <div class="panel">
-          <p class="eyebrow">Welcome back</p>
-          <h1 style="margin-top:0;">Sign in to JOSH</h1>
-          <div id="login-status" hidden></div>
-          <form id="login-form">
+  <body data-mode="login">
+    <div class="auth-wrap">
+      <aside class="auth-aside desktop-only">
+        <a class="brand" href="/" aria-label="JOSH home">
+          <span class="brand-mark"></span><span class="brand-name">JO<b>SH</b></span>
+        </a>
+        <div>
+          <h1 style="font-size:34px;line-height:1.15;margin-bottom:14px">Welcome back to JOSH.</h1>
+          <p class="sub" style="max-width:420px">Sign in to upload, subscribe to creators, keep your watch history and track your earnings.</p>
+          <ul class="points mt-24">
+            <li>Creators keep 60% of recorded revenue</li>
+            <li>Real analytics on every upload</li>
+            <li>USDT BEP20 withdrawals from 0.5 USDT</li>
+          </ul>
+        </div>
+        <p class="small muted">JOSH — creator video platform</p>
+      </aside>
+      <main class="auth-main">
+        <div class="auth-card">
+          <a class="brand mobile-only mb-16" href="/">
+            <span class="brand-mark"></span><span class="brand-name">JO<b>SH</b></span>
+          </a>
+          <h1>Sign in</h1>
+          <p class="sub">Use your JOSH account to continue.</p>
+          <form class="auth-form" id="auth-form" novalidate>
             <div class="field">
               <label for="email">Email</label>
-              <input id="email" name="email" type="email" autocomplete="email" required />
+              <input class="input" type="email" id="email" name="email" autocomplete="email" required placeholder="you@example.com">
             </div>
             <div class="field">
               <label for="password">Password</label>
-              <input id="password" name="password" type="password" autocomplete="current-password" required />
+              <input class="input" type="password" id="password" name="password" autocomplete="current-password" required placeholder="Your password">
             </div>
-            <button class="button primary" type="submit" style="width: 100%;">Sign in</button>
+            <div class="alert error hidden" id="error" role="alert"></div>
+            <button class="btn primary block" type="submit" id="submit">Sign in</button>
           </form>
-          <p class="small muted" style="margin:18px 0 0;">
-            No account yet? <a href="/signup">Create one</a>
-          </p>
+          <p class="auth-foot">New to JOSH? <a href="/signup">Create an account</a></p>
         </div>
-      </div>
-    </main>
-
-    <footer class="page">
-      <div class="container small muted">© 2026 JOSH · Built for momentum</div>
-    </footer>
+      </main>
+    </div>
+    <script type="module" src="/assets/js/auth.js"></script>
   </body>
 </html>

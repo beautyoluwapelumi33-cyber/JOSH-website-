@@ -3,57 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Join JOSH | Create an account</title>
+    <title>Create account · JOSH</title>
+    <meta name="theme-color" content="#0a0a0e" />
     <link rel="stylesheet" href="/assets/css/platform.css" />
-    <script type="module" src="/assets/js/app.js"></script>
   </head>
-  <body data-page="signup" data-nav="">
-    <header>
-      <div class="container">
-        <nav>
-          <a class="brand" href="/"><span class="brand-mark">J</span><span>JOSH</span></a>
-          <div class="nav-links">
-            <a href="/feed">Feed</a>
-            <a href="/live">Live</a>
-            <a href="/studio">Studio</a>
-            <a href="/earnings">Earnings</a>
-          </div>
-          <div class="nav-auth" id="nav-auth"></div>
-        </nav>
-      </div>
-    </header>
-
-    <main class="page">
-      <div class="auth-shell">
-        <div class="panel">
-          <p class="eyebrow">Create an account</p>
-          <h1 style="margin-top:0;">Join JOSH</h1>
-          <div id="signup-status" hidden></div>
-          <form id="signup-form">
+  <body data-mode="signup">
+    <div class="auth-wrap">
+      <aside class="auth-aside desktop-only">
+        <a class="brand" href="/" aria-label="JOSH home">
+          <span class="brand-mark"></span><span class="brand-name">JO<b>SH</b></span>
+        </a>
+        <div>
+          <h1 style="font-size:34px;line-height:1.15;margin-bottom:14px">Start creating on JOSH.</h1>
+          <p class="sub" style="max-width:420px">Upload videos, build a channel and see real numbers — views, likes, comments and earnings you can actually withdraw.</p>
+          <ul class="points mt-24">
+            <li>Publish videos and Shorts</li>
+            <li>Creator Studio with real analytics</li>
+            <li>60% creator / 40% platform revenue split</li>
+          </ul>
+        </div>
+        <p class="small muted">JOSH — creator video platform</p>
+      </aside>
+      <main class="auth-main">
+        <div class="auth-card">
+          <a class="brand mobile-only mb-16" href="/">
+            <span class="brand-mark"></span><span class="brand-name">JO<b>SH</b></span>
+          </a>
+          <h1>Create your account</h1>
+          <p class="sub">It takes a moment — no payment details required.</p>
+          <form class="auth-form" id="auth-form" novalidate>
             <div class="field">
-              <label for="display-name">Display name</label>
-              <input id="display-name" name="displayName" type="text" maxlength="40" autocomplete="nickname" required />
+              <label for="displayName">Channel name</label>
+              <input class="input" id="displayName" name="displayName" autocomplete="nickname" maxlength="60" required placeholder="How your channel appears">
             </div>
             <div class="field">
               <label for="email">Email</label>
-              <input id="email" name="email" type="email" autocomplete="email" required />
+              <input class="input" type="email" id="email" name="email" autocomplete="email" required placeholder="you@example.com">
             </div>
             <div class="field">
               <label for="password">Password</label>
-              <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required />
-              <span class="help">At least 8 characters.</span>
+              <input class="input" type="password" id="password" name="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters">
+              <p class="hint">Use at least 8 characters. Passwords are stored hashed with scrypt.</p>
             </div>
-            <button class="button primary" type="submit" style="width: 100%;">Create account</button>
+            <div class="alert error hidden" id="error" role="alert"></div>
+            <button class="btn primary block" type="submit" id="submit">Create account</button>
           </form>
-          <p class="small muted" style="margin:18px 0 0;">
-            Already have an account? <a href="/login">Sign in</a>
-          </p>
+          <p class="auth-foot">Already have an account? <a href="/login">Sign in</a></p>
         </div>
-      </div>
-    </main>
-
-    <footer class="page">
-      <div class="container small muted">© 2026 JOSH · Built for momentum</div>
-    </footer>
+      </main>
+    </div>
+    <script type="module" src="/assets/js/auth.js"></script>
   </body>
 </html>
