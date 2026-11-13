@@ -81,6 +81,21 @@ async function publishVideo(cookie, fields) {
 }
 
 let owner; // first account -> admin
+
+/** Creates and uploads a video but deliberately leaves it as a draft. */
+async function createDraftVideo(cookie, fields) {
+  const created = await request('/api/videos', { method: 'POST', cookie, body: fields });
+  assert.equal(created.status, 201, `create failed: ${created.text}`);
+  const id = created.json.video.id;
+  const upload = await request(`/api/videos/${id}/file`, {
+    method: 'PUT',
+    cookie,
+    raw: Buffer.from('draft payload'),
+    headers: { 'content-type': 'video/mp4' },
+  });
+  assert.equal(upload.status, 200, `upload failed: ${upload.text}`);
+  return id;
+}
 let creator;
 let viewer;
 let musicVideoId;
@@ -104,7 +119,7 @@ test.before(async () => {
     description: 'Recorded live in one take.',
     category: 'Music',
   });
-  draftVideoId = await publishVideo(creator.cookie, {
+  draftVideoId = await createDraftVideo(creator.cookie, {
     title: 'Unlisted work in progress',
     description: 'Still editing.',
     category: 'Comedy',
@@ -138,7 +153,7 @@ test('the feed filters by category, creator, search term and shorts only', async
   assert.equal(comedy.json.videos.some((v) => v.id === musicVideoId), false);
 
   const byCreator = await request(`/api/videos?channel=${creator.json.user.id}`);
-  assert.equal(byCreator.json.videos.every((v) => v.userId === creator.json.user.id), true);
+  assert.equal(byCreator.json.videos.every((v) => v.creator.id === creator.json.user.id), true);
 
   const search = await request('/api/videos?q=midnight');
   assert.ok(search.json.videos.some((v) => v.id === musicVideoId));
@@ -284,5 +299,6 @@ test('the public feed exposes no private fields', async () => {
   assert.ok(video);
   assert.equal(video.passwordHash, undefined);
   assert.equal(video.filePath, undefined);
-  assert.equal(typeof video.creatorName, 'string');
+  assert.equal(video.creator.id, creator.json.user.id);
+  assert.equal(typeof video.creator.displayName, 'string');
 });
